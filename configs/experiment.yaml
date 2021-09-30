@@ -1,0 +1,115 @@
+wandb_project: kaggle-ventilator-pressure-prediction
+experiment_name: LSTM-baseline
+
+dataset:
+  train: &train_dataset
+    class: VentilaltorData
+    kwargs:
+      id_col: breath_id
+      seq_feature_cols: ["time_step", "u_in", "u_out"]
+      identity_feature_cols: ["R", "C"]
+      target_col: pressure
+
+  val: *train_dataset
+
+  test:
+    class: VentilaltorData
+    kwargs:
+      id_col: breath_id
+      seq_feature_cols: ["time_step", "u_in", "u_out"]
+      identity_feature_cols: ["R", "C"]
+
+esr:
+  monitor: val_MAE
+  min_delta: 0.0001
+  patience: 20
+  verbose: False
+  mode: min
+
+num_epochs: &n_epochs 100
+
+batch_size:
+    train: 128
+    val: 256
+num_workers:
+    train: 8
+    val: 8
+
+optimizer:
+    optim_class: AdamW
+    optim_kwargs:
+        lr: &learning_rate 0.001
+# schedular:
+#     schedular_class: OneCycleLR
+#     schedular_interval: step
+#     scheduler_kwargs:
+#       max_lr: *learning_rate
+#       epochs: *n_epochs
+#       div_factor: 30
+#       pct_start: 0.2
+#       final_div_factor: 100
+
+schedular:
+    schedular_class: ReduceLROnPlateau
+    schedular_interval: epoch
+    scheduler_kwargs:
+      mode: max
+      factor: 0.6
+      patience: 5
+      threshold: 0.0001
+
+
+loss:
+  class: MSELoss
+
+mp_training: False
+
+model:
+  class: VentNetV0
+  kwargs:
+    input_features: 3
+    init_proj_dimension: &input_proj_dim 8
+
+    embedding_layers:
+      identity_columns:
+        R:
+          num_embeddings: 3
+          embedding_dim: 8
+        C:
+          num_embeddings: 3
+          embedding_dim: 8
+        final_output_size: 16
+
+    rnn_blocks:
+      block1:
+        class: LSTM
+        rnn_kwargs:
+          input_size: *input_proj_dim
+          hidden_size: 64
+          num_layers: 1
+          batch_first: True
+          dropout: 0.1
+          bidirectional: True
+        is_residual: True
+        residual_dropout: 0.1
+        output_size: &rnn_block1_output_size 128
+      block2:
+        class: LSTM
+        rnn_kwargs:
+          input_size: *rnn_block1_output_size
+          hidden_size: 128
+          num_layers: 1
+          batch_first: True
+          dropout: 0.1
+          bidirectional: True
+        is_residual: True
+        output_size: &rnn_block2_output_size 256
+        residual_dropout: 0.1
+      final_ouput_size: *rnn_block2_output_size
+
+    fc_block:
+      out_dim: 1
+      is_bn: False
+      is_act: True
+      dropout: 0.1
+
