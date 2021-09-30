@@ -1,51 +1,53 @@
-from torch import nn
+from model import LinBnReLu, RNNBlock
+import model
 import torch
+from torch import nn
 
-__all__ = ["VentNetV0"]
-
-
-class LinBnReLu(nn.Module):
-    def __init__(self, in_dim, out_dim, is_bn=True, is_act=True, dropout=0):
-        super().__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.is_act = is_act
-        if self.is_act:
-            self.act = nn.ReLU()
-        self.is_bn = is_bn
-        if self.is_bn:
-            self.bn = nn.BatchNorm1d(in_dim)
-        self.lin = nn.Linear(in_dim, out_dim)
-
-    def forward(self, x):
-        if self.is_bn:
-            x = self.bn(x)
-        x = self.dropout(x)
-        if self.is_act:
-            x = self.act(x)
-        x = self.lin(x)
-        return x
+__all__ = ["VentNetV0", "VentNetV1"]
 
 
-class RNNBlock(nn.Module):
+class VentNetV1(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.rnn = getattr(nn, self.config["class"])(**self.config["rnn_kwargs"])
-        if self.config.is_residual:
-            self.residual_proj_layer = LinBnReLu(
-                in_dim=self.config.rnn_kwargs.input_size,
-                out_dim=self.config.output_size,
-                is_act=True,
-                is_bn=False,
-                dropout=self.config.residual_dropout,
+
+        emb_layers = []
+        for k in self.config.embedding_layer:
+            emb_layers.append(nn.Embedding(**self.config.embedding_layer[k]))
+        self.embedding = nn.Sequential(*emb_layers)
+
+        layers = []
+        for k in self.config.feature_extractor:
+            layers.append(
+                getattr(model, config.feature_extractor[k]["class"])(
+                    **config.feature_extractor[k]["kwargs"]
+                )
             )
+        self.cnn = nn.Sequential(*layers)
+
+        layers = []
+        for k in self.config.rnn_blocks:
+            layers.append(
+                getattr(model, self.config.rnn_blocks[k]["class"])(
+                    self.config.rnn_blocks[k]["kwargs"]
+                )
+            )
+        self.rnn = nn.Sequential(*layers)
+
+        self.fc = LinBnReLu(**self.config.fc_block)
 
     def forward(self, x):
-        x_seq, _ = self.rnn(x)
-        if self.config.is_residual:
-            x_res = self.residual_proj_layer(x)
-            x_seq = x_seq + x_res
-        return x_seq
+        x_cat, x_num = x["cat"], x["num"]
+        x_cat = torch.cat(
+            [self.embedding[i](x_cat[:, :, i]) for i in range(len(self.embedding))],
+            dim=-1,
+        )
+        x = torch.cat([x_num, x_cat], dim=-1)
+        x = self.cnn(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = self.rnn(x)
+        x = self.fc(x)
+
+        return x.squeeze(-1)
 
 
 class VentNetV0(nn.Module):

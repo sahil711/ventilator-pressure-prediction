@@ -1,5 +1,5 @@
 wandb_project: kaggle-ventilator-pressure-prediction
-experiment_name: LSTM-baseline
+experiment_name: LSTM-baseline-4
 
 dataset:
   train: &train_dataset
@@ -53,9 +53,9 @@ schedular:
     schedular_class: ReduceLROnPlateau
     schedular_interval: epoch
     scheduler_kwargs:
-      mode: max
+      mode: min
       factor: 0.6
-      patience: 5
+      patience: 3
       threshold: 0.0001
 
 
@@ -68,44 +68,57 @@ model:
   class: VentNetV0
   kwargs:
     input_features: 3
-    init_proj_dimension: &input_proj_dim 8
+    init_proj_dimension: &input_proj_dim 32
 
     embedding_layers:
       identity_columns:
         R:
           num_embeddings: 3
-          embedding_dim: 8
+          embedding_dim: 16
         C:
           num_embeddings: 3
-          embedding_dim: 8
-        final_output_size: 16
+          embedding_dim: 16
+        final_output_size: 32
 
     rnn_blocks:
       block1:
         class: LSTM
         rnn_kwargs:
           input_size: *input_proj_dim
-          hidden_size: 64
+          hidden_size: 512
           num_layers: 1
           batch_first: True
           dropout: 0.1
           bidirectional: True
         is_residual: True
-        residual_dropout: 0.1
-        output_size: &rnn_block1_output_size 128
+        residual_dropout: 0
+        output_size: &rnn_block1_output_size 1024
       block2:
         class: LSTM
         rnn_kwargs:
           input_size: *rnn_block1_output_size
-          hidden_size: 128
+          hidden_size: 512
           num_layers: 1
           batch_first: True
           dropout: 0.1
           bidirectional: True
         is_residual: True
-        output_size: &rnn_block2_output_size 256
-        residual_dropout: 0.1
-      final_ouput_size: *rnn_block2_output_size
+        output_size: &rnn_block2_output_size 1024
+        residual_dropout: 0
+      block3:
+        class: LSTM
+        rnn_kwargs:
+          input_size: *rnn_block2_output_size
+          hidden_size: 512
+          num_layers: 1
+          batch_first: True
+          dropout: 0.1
+          bidirectional: True
+        is_residual: True
+        output_size: &rnn_block3_output_size 1024
+        residual_dropout: 0
+
+      final_ouput_size: *rnn_block3_output_size
 
     fc_block:
       out_dim: 1

@@ -1,0 +1,166 @@
+wandb_project: kaggle-ventilator-pressure-prediction
+experiment_name: CNN-RNN-baseline-1
+
+dataset:
+  train: &train_dataset
+    class: VentilaltorSeqData
+    kwargs:
+      id_col: breath_id
+      cat_columns: ['u_out','R','C']
+      num_columns: ['time_step','u_in']
+      target_col: pressure
+
+  val: *train_dataset
+
+  test:
+    class: VentilaltorSeqData
+    kwargs:
+      id_col: breath_id
+      cat_columns: ['u_out','R','C']
+      num_columns: ['time_step','u_in']
+
+esr:
+  monitor: val_MAE
+  min_delta: 0.0001
+  patience: 20
+  verbose: False
+  mode: min
+
+num_epochs: &n_epochs 100
+
+batch_size:
+    train: 128
+    val: 256
+num_workers:
+    train: 8
+    val: 8
+
+optimizer:
+    optim_class: AdamW
+    optim_kwargs:
+        lr: &learning_rate 0.001
+# schedular:
+#     schedular_class: OneCycleLR
+#     schedular_interval: step
+#     scheduler_kwargs:
+#       max_lr: *learning_rate
+#       epochs: *n_epochs
+#       div_factor: 30
+#       pct_start: 0.2
+#       final_div_factor: 100
+
+schedular:
+    schedular_class: ReduceLROnPlateau
+    schedular_interval: epoch
+    scheduler_kwargs:
+      mode: min
+      factor: 0.6
+      patience: 3
+      threshold: 0.0001
+
+
+loss:
+  class: MSELoss
+
+mp_training: False
+
+model:
+  class: VentNetV1
+  kwargs:
+    embedding_layer:
+      u_out:
+        num_embeddings: 2
+        embedding_dim: 8
+      R:
+        num_embeddings: 3
+        embedding_dim: 8
+      C:
+        num_embeddings: 3
+        embedding_dim: 8
+
+    input_dimension: &input_dim 26 #8*3+2
+
+    feature_extractor:
+      input_layer:
+        class: Conv1DBnRelu
+        kwargs:
+          in_channels: *input_dim
+          out_channels: 64
+          kernel_size: 3
+          padding: 1
+      block1:
+        class: Conv1DBasicBlock
+        kwargs:
+          in_channels: 64
+          out_channels: 64
+          kernel_size: 3
+          padding: 1
+      scaling_layer1:
+        class: Conv1DBnRelu
+        kwargs:
+          in_channels: 64
+          out_channels: 128
+          kernel_size: 3
+          padding: 1
+      block2:
+        class: Conv1DBasicBlock
+        kwargs:
+          in_channels: 128
+          out_channels: 128
+          kernel_size: 3
+          padding: 1
+      scaling_layer2:
+        class: Conv1DBnRelu
+        kwargs:
+          in_channels: 128
+          out_channels: 256
+          kernel_size: 3
+          padding: 1
+      block3:
+        class: Conv1DBasicBlock
+        kwargs:
+          in_channels: 256
+          out_channels: &conv_output_dim 256
+          kernel_size: 3
+          padding: 1
+
+    rnn_blocks:
+      block1:
+        class: RNNBlockV2
+        kwargs:
+          rnn_class: LSTM
+          rnn_kwargs:
+            input_size: *conv_output_dim
+            hidden_size: 256
+            num_layers: 1
+            batch_first: True
+            dropout: 0.1
+            bidirectional: True
+          is_residual: True
+          output_size: &rnn_block1_output_size 768 #256*2+256
+      block2:
+        class: RNNBlockV2
+        kwargs:
+          rnn_class: LSTM
+          rnn_kwargs:
+            input_size: *rnn_block1_output_size
+            hidden_size: 256
+            num_layers: 1
+            batch_first: True
+            dropout: 0.1
+            bidirectional: True
+          is_residual: True
+          is_proj: False
+          residual_dropout: 0
+          output_size: &rnn_block2_output_size 1280 #256*2+768
+
+    fc_block:
+      in_dim: *rnn_block2_output_size
+      out_dim: 1
+      is_bn: False
+      is_act: False
+      dropout: 0.1
+
+
+
+
