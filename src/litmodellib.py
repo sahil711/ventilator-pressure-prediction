@@ -17,13 +17,25 @@ class Model(pl.LightningModule):
         self.criteria = getattr(nn, self.config.loss["class"])()
         self.num_train_iter = kwargs.get("num_train_iter")
         self.train_metric = MeanAbsoluteError(compute_on_step=True)
+        self.train_metric2 = MeanAbsoluteError(compute_on_step=True)
         self.val_metric = MeanAbsoluteError(compute_on_step=False)
+        self.val_metric2 = MeanAbsoluteError(compute_on_step=False)
 
     def training_step(self, batch, batch_idx):
         y = batch["target"].view(-1)
         preds = self.model(batch).view(-1)
-        loss = self.criteria(preds, y)
-        self.train_metric(preds, y)
+
+        idx = torch.where(batch["cat"][:, :, 0].view(-1) == 0)[0]
+        y_trunc = y[idx]
+        preds_trunc = preds[idx]
+        if self.config.training_type.loss == "truncated":
+            loss = self.criteria(preds_trunc, y_trunc)
+        else:
+            loss = self.criteria(preds, y)
+
+        self.train_metric2(preds, y)
+        self.train_metric(preds_trunc, y_trunc)
+
         self.log(
             name="train_MAE",
             value=self.train_metric,
@@ -33,6 +45,16 @@ class Model(pl.LightningModule):
             rank_zero_only=True,
             sync_dist=True,
         )
+        self.log(
+            name="train_MAE_complete",
+            value=self.train_metric2,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            rank_zero_only=True,
+            sync_dist=True,
+        )
+
         self.log(
             name="train_loss",
             value=loss,
@@ -47,8 +69,18 @@ class Model(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         y = batch["target"].view(-1)
         preds = self.model(batch).view(-1)
-        loss = self.criteria(preds, y)
-        self.val_metric(preds, y)
+
+        idx = torch.where(batch["cat"][:, :, 0].view(-1) == 0)[0]
+        y_trunc = y[idx]
+        preds_trunc = preds[idx]
+        if self.config.training_type.loss == "truncated":
+            loss = self.criteria(preds_trunc, y_trunc)
+        else:
+            loss = self.criteria(preds, y)
+
+        self.val_metric(preds_trunc, y_trunc)
+        self.val_metric2(preds, y)
+
         self.log(
             name="val_MAE",
             value=self.val_metric,
@@ -58,6 +90,17 @@ class Model(pl.LightningModule):
             rank_zero_only=True,
             sync_dist=True,
         )
+
+        self.log(
+            name="val_MAE_complete",
+            value=self.val_metric2,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            rank_zero_only=True,
+            sync_dist=True,
+        )
+
         self.log(
             name="val_loss",
             value=loss,

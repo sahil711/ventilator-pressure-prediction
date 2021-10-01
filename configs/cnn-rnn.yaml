@@ -1,5 +1,13 @@
 wandb_project: kaggle-ventilator-pressure-prediction
-experiment_name: CNN-RNN-baseline-1
+experiment_name: CNN-RNN-with-norm
+
+training_type:
+  loss: truncated #complete truncated
+  metric: truncated #complete truncated
+
+normalization:
+  is_norm: True
+  is_log_transform: True
 
 dataset:
   train: &train_dataset
@@ -60,7 +68,7 @@ schedular:
 
 
 loss:
-  class: MSELoss
+  class: L1Loss #L1Loss MSELoss
 
 mp_training: False
 

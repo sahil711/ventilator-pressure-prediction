@@ -14,6 +14,8 @@ from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 import datalib
 import torch
+from sklearn.preprocessing import StandardScaler
+import numpy as np
 
 DATA_DIR = "/mnt/disks/extra_data/kaggle/ventilator_prediction/"
 R_MAP = {5: 0, 50: 1, 20: 2}
@@ -36,6 +38,14 @@ def map_dataset(data):
 
 def train_model(config_path, fold_nums):
     df = pd.read_csv(DATA_DIR + "train.csv")
+    config = OmegaConf.load(config_path)
+    if config.normalization.is_norm:
+        scl = StandardScaler()
+        df["time_step"] = scl.fit_transform(df[["time_step"]])[:, 0]
+        if config.normalization.is_log_transform:
+            df["u_in"] = np.log1p(df["u_in"])
+        df["u_in"] = scl.fit_transform(df[["u_in"]])[:, 0]
+
     folds = GroupKFold(n_splits=5)
     folds = list(folds.split(df, groups=df["breath_id"]))
     for i in fold_nums:
@@ -43,7 +53,6 @@ def train_model(config_path, fold_nums):
         val = df.iloc[folds[i][1]]
         train = map_dataset(train)
         val = map_dataset(val)
-        config = OmegaConf.load(config_path)
         path = "../model_zoo/{}".format(config["experiment_name"])
         create_path(path)
         if not os.path.exists(path + "/config.yaml"):
