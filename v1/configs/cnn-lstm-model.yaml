@@ -1,0 +1,136 @@
+wandb_project: kaggle-ventilator-pressure-prediction
+experiment_name: v1-CNN-RNN-1
+
+training_type:
+  loss: truncated #complete truncated
+  metric: truncated #complete truncated
+
+normalization:
+  is_norm: True
+  is_log_transform: False
+
+dataset:
+  train: &train_dataset
+    class: VentilatorData
+    kwargs:
+      categorical_columns: ['u_out','R','C']
+      numerical_columns: ['time_step', 'u_in',
+'u_in_lag_1', 'u_in_lag_2', 'u_in_cumsum', 'u_in_cummean',
+'u_in_cummax', 'next_u_in', 'roll_u_in_max', 'roll_u_in_min',
+'time_lag_1', 'time_lag_2', 'area', 'u_out_lag_1', 'u_out_lag_2',
+'time_step*u_out', 'R+C', 'R/C', 'u_in/C', 'u_in/R', 'u_in_cumsum/C',
+'u_in_cumsum/R', 'timestep_diff', 'u_in_diff', 'u_in_pct_change',
+'u_in_diff_next', 'u_in_log', 'u_in_cumsum_log']
+      target_column: pressure
+
+  val: *train_dataset
+
+  test:
+    class: VentilatorData
+    kwargs:
+      categorical_columns: ['u_out','R','C']
+      numerical_columns: ['time_step','u_in']
+
+esr:
+  monitor: val_MAE
+  min_delta: 0.0001
+  patience: 20
+  verbose: False
+  mode: min
+
+num_epochs: &n_epochs 100
+
+batch_size:
+    train: 128
+    val: 256
+num_workers:
+    train: 8
+    val: 8
+
+optimizer:
+    optim_class: Adam
+    optim_kwargs:
+        lr: &learning_rate 0.001
+
+schedular:
+    schedular_class: OneCycleLR
+    schedular_interval: step
+    scheduler_kwargs:
+      max_lr: *learning_rate
+      epochs: *n_epochs
+      div_factor: 30
+      pct_start: 0.2
+      final_div_factor: 100
+
+# schedular:
+    # schedular_class: ReduceLROnPlateau
+    # schedular_interval: epoch
+    # scheduler_kwargs:
+    #   mode: min
+    #   factor: 0.6
+    #   patience: 3
+    #   threshold: 0.0001
+
+
+loss:
+  class: L1Loss #L1Loss MSELoss
+
+mp_training: False
+
+model:
+  class: CNNLSTMModel
+  kwargs:
+    embedding_layer:
+      u_out:
+        num_embeddings: 2
+        embedding_dim: 32
+      R:
+        num_embeddings: 3
+        embedding_dim: 32
+      C:
+        num_embeddings: 3
+        embedding_dim: 32
+
+    input_dim: &in_dim 124 #224 #32*3+2
+
+
+    feature_extractor:
+      input_layer:
+        class: Conv1DBnRelu
+        kwargs:
+          in_channels: *in_dim
+          out_channels: 64
+          kernel_size: 3
+          padding: 1
+      block1:
+        class: Conv1DBasicBlock
+        kwargs:
+          in_channels: 64
+          out_channels: 64
+          kernel_size: 3
+          padding: 1
+      scaling_layer1:
+        class: Conv1DBnRelu
+        kwargs:
+          in_channels: 64
+          out_channels: 128
+          kernel_size: 1
+          padding: 0
+      block2:
+        class: Conv1DBasicBlock
+        kwargs:
+          in_channels: 128
+          out_channels: 128
+          kernel_size: 3
+          padding: 1
+
+    rnn_layer:
+      class: LSTM
+      kwargs:
+        input_size: 128
+        hidden_size: 512
+        num_layers: 4
+        batch_first: True
+        bidirectional: True
+        dropout: 0
+
