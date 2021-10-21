@@ -1,0 +1,297 @@
+wandb_project: kaggle-ventilator-pressure-prediction
+experiment_name: LSTMDpRelu-Transformer-concat-skip-classify-smooth-CE-dp-0.4
+seq_len: 40
+is_u_out: true
+topk: 3
+create_features: true
+create_matrix: false
+training_type:
+  loss: truncated
+  metric: truncated
+  is_smoothing: true
+normalization:
+  is_norm: true
+  is_log_transform: false
+dataset:
+  train:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns:
+      - u_out
+      - R
+      - C
+      numerical_columns:
+      - time_step
+      - u_in
+      - mean_u_in_last_5
+      - min_u_in_last_5
+      - max_u_in_last_5
+      - std_u_in_last_5
+      - mean_u_in_last_10
+      - min_u_in_last_10
+      - max_u_in_last_10
+      - std_u_in_last_10
+      - mean_u_in_next_5
+      - min_u_in_next_5
+      - max_u_in_next_5
+      - std_u_in_next_5
+      - mean_u_in_next_10
+      - min_u_in_next_10
+      - max_u_in_next_10
+      - std_u_in_next_10
+      - u_in_cumsum
+      - u_in_cummean
+      - u_in_cummax
+      - R+C
+      - R/C
+      - u_in/C
+      - u_in/R
+      - u_in_cumsum/C
+      - u_in_cumsum/R
+      - lag_u_in_1
+      - lead_u_in_1
+      - lag_u_in_2
+      - lead_u_in_2
+      - lag_u_in_3
+      - lead_u_in_3
+      - lag_u_in_4
+      - lead_u_in_4
+      - auc
+      - lag_auc_1
+      - lead_auc_1
+      - lag_auc_2
+      - lead_auc_2
+      - per_change_u_in_lag_u_in_1
+      - per_change_u_in_lead_u_in_1
+      - per_change_u_in_lag_u_in_2
+      - per_change_u_in_lead_u_in_2
+      - per_change_u_in_lag_u_in_3
+      - per_change_u_in_lead_u_in_3
+      - per_change_u_in_lag_u_in_4
+      - per_change_u_in_lead_u_in_4
+      - per_change_auc_lag_auc_1
+      - per_change_auc_lead_auc_1
+      - per_change_auc_lag_auc_2
+      - per_change_auc_lead_auc_2
+      target_column: pressure
+  val:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns:
+      - u_out
+      - R
+      - C
+      numerical_columns:
+      - time_step
+      - u_in
+      - mean_u_in_last_5
+      - min_u_in_last_5
+      - max_u_in_last_5
+      - std_u_in_last_5
+      - mean_u_in_last_10
+      - min_u_in_last_10
+      - max_u_in_last_10
+      - std_u_in_last_10
+      - mean_u_in_next_5
+      - min_u_in_next_5
+      - max_u_in_next_5
+      - std_u_in_next_5
+      - mean_u_in_next_10
+      - min_u_in_next_10
+      - max_u_in_next_10
+      - std_u_in_next_10
+      - u_in_cumsum
+      - u_in_cummean
+      - u_in_cummax
+      - R+C
+      - R/C
+      - u_in/C
+      - u_in/R
+      - u_in_cumsum/C
+      - u_in_cumsum/R
+      - lag_u_in_1
+      - lead_u_in_1
+      - lag_u_in_2
+      - lead_u_in_2
+      - lag_u_in_3
+      - lead_u_in_3
+      - lag_u_in_4
+      - lead_u_in_4
+      - auc
+      - lag_auc_1
+      - lead_auc_1
+      - lag_auc_2
+      - lead_auc_2
+      - per_change_u_in_lag_u_in_1
+      - per_change_u_in_lead_u_in_1
+      - per_change_u_in_lag_u_in_2
+      - per_change_u_in_lead_u_in_2
+      - per_change_u_in_lag_u_in_3
+      - per_change_u_in_lead_u_in_3
+      - per_change_u_in_lag_u_in_4
+      - per_change_u_in_lead_u_in_4
+      - per_change_auc_lag_auc_1
+      - per_change_auc_lead_auc_1
+      - per_change_auc_lag_auc_2
+      - per_change_auc_lead_auc_2
+      target_column: pressure
+  test:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns:
+      - u_out
+      - R
+      - C
+      numerical_columns:
+      - time_step
+      - u_in
+      - mean_u_in_last_5
+      - min_u_in_last_5
+      - max_u_in_last_5
+      - std_u_in_last_5
+      - mean_u_in_last_10
+      - min_u_in_last_10
+      - max_u_in_last_10
+      - std_u_in_last_10
+      - mean_u_in_next_5
+      - min_u_in_next_5
+      - max_u_in_next_5
+      - std_u_in_next_5
+      - mean_u_in_next_10
+      - min_u_in_next_10
+      - max_u_in_next_10
+      - std_u_in_next_10
+      - u_in_cumsum
+      - u_in_cummean
+      - u_in_cummax
+      - R+C
+      - R/C
+      - u_in/C
+      - u_in/R
+      - u_in_cumsum/C
+      - u_in_cumsum/R
+      - lag_u_in_1
+      - lead_u_in_1
+      - lag_u_in_2
+      - lead_u_in_2
+      - lag_u_in_3
+      - lead_u_in_3
+      - lag_u_in_4
+      - lead_u_in_4
+      - auc
+      - lag_auc_1
+      - lead_auc_1
+      - lag_auc_2
+      - lead_auc_2
+      - per_change_u_in_lag_u_in_1
+      - per_change_u_in_lead_u_in_1
+      - per_change_u_in_lag_u_in_2
+      - per_change_u_in_lead_u_in_2
+      - per_change_u_in_lag_u_in_3
+      - per_change_u_in_lead_u_in_3
+      - per_change_u_in_lag_u_in_4
+      - per_change_u_in_lead_u_in_4
+      - per_change_auc_lag_auc_1
+      - per_change_auc_lead_auc_1
+      - per_change_auc_lag_auc_2
+      - per_change_auc_lead_auc_2
+esr:
+  monitor: val_MAE
+  min_delta: 0.0001
+  patience: 40
+  verbose: false
+  mode: min
+num_epochs: 100
+batch_size:
+  train: 32
+  val: 64
+num_workers:
+  train: 8
+  val: 8
+optimizer:
+  optim_class: Adam
+  optim_kwargs:
+    lr: 0.001
+schedular:
+  schedular_class: OneCycleLR
+  schedular_interval: step
+  scheduler_kwargs:
+    max_lr: 0.001
+    epochs: 100
+    div_factor: 30
+    pct_start: 0.2
+    final_div_factor: 50
+loss:
+  class: CrossEntropyLoss
+  kwargs:
+    reduction: mean
+mp_training: false
+model:
+  class: LSTMTransformerModelClassificationV2
+  kwargs:
+    embedding_layer:
+      u_out:
+        num_embeddings: 2
+        embedding_dim: 4
+      R:
+        num_embeddings: 3
+        embedding_dim: 4
+      C:
+        num_embeddings: 3
+        embedding_dim: 4
+    input_dim: 64
+    rnn_layer:
+      layer1:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 64
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer2:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 1088
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer3:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 2112
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer4:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 3136
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+    transformer_layer:
+      num_layers: 2
+      class: TransformerEncoderLayer
+      kwargs:
+        d_model: 512
+        nhead: 4
+        dim_feedforward: 512
+        dropout: 0.5
+    rnn_init:
+      class: InitRNNWeights
+      kwargs:
+        init_type: yakama
+    fc_input_size: 4160
+    output_dim: 950

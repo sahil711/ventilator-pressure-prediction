@@ -1,4 +1,4 @@
-def fc(df):
+def fc(df, include_R_C=True):
     feat = df[["breath_id", "u_in"]].groupby("breath_id")["u_in"]
     for i in [5, 10]:
         df["mean_{}_last_{}".format("u_in", i)] = (
@@ -42,12 +42,13 @@ def fc(df):
     )
     df["u_in_cummax"] = df.groupby("breath_id")["u_in"].cummax()
 
-    df["R+C"] = df["R"] + df["C"]
-    df["R/C"] = df["R"] / df["C"]
-    df["u_in/C"] = df["u_in"] / df["C"]
-    df["u_in/R"] = df["u_in"] / df["R"]
-    df["u_in_cumsum/C"] = df["u_in_cumsum"] / df["C"]
-    df["u_in_cumsum/R"] = df["u_in_cumsum"] / df["R"]
+    if include_R_C:
+        df["R+C"] = df["R"] + df["C"]
+        df["R/C"] = df["R"] / df["C"]
+        df["u_in/C"] = df["u_in"] / df["C"]
+        df["u_in/R"] = df["u_in"] / df["R"]
+        df["u_in_cumsum/C"] = df["u_in_cumsum"] / df["C"]
+        df["u_in_cumsum/R"] = df["u_in_cumsum"] / df["R"]
 
     for i in [1, 2, 3, 4]:
         df["lag_{}_{}".format("u_in", i)] = (
