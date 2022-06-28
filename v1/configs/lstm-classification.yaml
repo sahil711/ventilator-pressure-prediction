@@ -1,5 +1,5 @@
 wandb_project: kaggle-ventilator-pressure-prediction
-experiment_name: LSTMDpRelu-Transformer-concat-skip-classify-smooth-CE-dp-0.4
+experiment_name: LSTMDpRelu-Transformer-concat-skip-classify-smooth-CE-dp-0.4-finetune
 
 seq_len: 40 #None, 20 more than the seq_len in dataset
 
@@ -99,15 +99,15 @@ dataset:
 esr:
   monitor: val_MAE
   min_delta: 0.0001
-  patience: 40
+  patience: 300
   verbose: False
   mode: min
 
 num_epochs: &n_epochs 100
 
 batch_size:
-    train: 32 #128 #32
-    val: 64 #256 64
+    train: 128 #128 #32
+    val: 512 #256 64
 num_workers:
     train: 8
     val: 8
@@ -115,17 +115,25 @@ num_workers:
 optimizer:
     optim_class: Adam
     optim_kwargs:
-        lr: &learning_rate 1e-3
+        lr: &learning_rate 1e-4
+
+start_lr: *learning_rate
+last_lr: 7e-5
 
 schedular:
-    schedular_class: OneCycleLR
-    schedular_interval: step
-    scheduler_kwargs:
-      max_lr: *learning_rate
-      epochs: *n_epochs
-      div_factor: 30
-      pct_start: 0.2
-      final_div_factor: 50
+    schedular_class: MultiplicativeLR
+    schedular_interval: epoch
+    # scheduler_kwargs:
+
+# schedular:
+#     schedular_class: OneCycleLR
+#     schedular_interval: step
+#     scheduler_kwargs:
+#       max_lr: *learning_rate
+#       epochs: *n_epochs
+#       div_factor: 30
+#       pct_start: 0.2
+#       final_div_factor: 50
 # schedular:
 #     schedular_class: CosineAnnealingLR
 #     schedular_interval: epoch
@@ -169,91 +177,48 @@ model:
       C:
         num_embeddings: 3
         embedding_dim: 4
-
-    input_dim: &in_dim 64 #32*3+52
-
+    input_dim: 64
     rnn_layer:
       layer1:
         class: LSTMDpReLu
         kwargs:
-          input_size: *in_dim
+          input_size: 64
           hidden_size: 512
           num_layers: 1
-          batch_first: True
-          bidirectional: True
-          dropout: &dp 0.4
-          is_activation: False
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
       layer2:
         class: LSTMDpReLu
         kwargs:
           input_size: 1088
           hidden_size: 512
           num_layers: 1
-          batch_first: True
-          bidirectional: True
-          dropout: *dp
-          is_activation: False
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
       layer3:
         class: LSTMDpReLu
         kwargs:
           input_size: 2112
           hidden_size: 512
           num_layers: 1
-          batch_first: True
-          bidirectional: True
-          dropout: *dp
-          is_activation: False
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
       layer4:
         class: LSTMDpReLu
         kwargs:
           input_size: 3136
           hidden_size: 512
           num_layers: 1
-          batch_first: True
-          bidirectional: True
-          dropout: *dp
-          is_activation: False
-      # layer5:
-      #   class: LSTMDpReLu
-      #   kwargs:
-      #     input_size: 4160
-      #     hidden_size: 256
-      #     num_layers: 1
-      #     batch_first: True
-      #     bidirectional: True
-      #     dropout: *dp
-      #     is_activation: False
-      # layer6:
-      #   class: LSTMDpReLu
-      #   kwargs:
-      #     input_size: 4672
-      #     hidden_size: 256
-      #     num_layers: 1
-      #     batch_first: True
-      #     bidirectional: True
-      #     dropout: *dp
-      #     is_activation: False
-      # layer7:
-      #   class: LSTMDpReLu
-      #   kwargs:
-      #     input_size: 5184
-      #     hidden_size: 256
-      #     num_layers: 1
-      #     batch_first: True
-      #     bidirectional: True
-      #     dropout: *dp
-      #     is_activation: False
-      # layer8:
-      #   class: LSTMDpReLu
-      #   kwargs:
-      #     input_size: 5696
-      #     hidden_size: 256
-      #     num_layers: 1
-      #     batch_first: True
-      #     bidirectional: True
-      #     dropout: *dp
-      #     is_activation: False
-
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
     transformer_layer:
       num_layers: 2
       class: TransformerEncoderLayer
@@ -262,14 +227,12 @@ model:
         nhead: 4
         dim_feedforward: 512
         dropout: 0.5
-
-
     rnn_init:
       class: InitRNNWeights
       kwargs:
-        init_type: yakama #yakama #None #xavier
-
+        init_type: yakama
     fc_input_size: 4160
+    output_dim: 950
 
 
 

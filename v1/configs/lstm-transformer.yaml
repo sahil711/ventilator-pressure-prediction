@@ -1,0 +1,449 @@
+wandb_project: kaggle-ventilator-pressure-prediction
+experiment_name: LSTM-Transformer-32-v2-4-4
+seq_len: 40
+is_u_out: true
+topk: 3
+create_features: true
+create_matrix: false
+training_type:
+  loss: False
+  metric: truncated
+  is_smoothing: True
+  is_oridnal: false
+normalization:
+  is_norm: true
+  is_log_transform: false
+dataset:
+  train:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns: ['R_cat', 'C_cat', 'RC_cat']
+      numerical_columns: ['R', 'C', 'time_step', 'u_in', 'bidc', 'u_in_lag_1', 'u_in_lag_2',
+       'u_in_lag_3', 'u_in_lag_4', 'u_in_cumsum', 'u_in_cumsum_lag_1',
+       'u_in_cumsum_lag_2', 'u_in_cumsum_lag_1-u_in_cumsum_lag_2',
+       'u_in_cumsum_lag_3', 'u_in_cumsum_lag_4', 'u_in_cummean', 'u_in_cummax',
+       'next_u_in', 'area', 'area_lag_1', 'area_lag_2', 'area_lead_1',
+       'area_lead_2', 'area_diff_lag_1', 'area_diff_lead_1',
+       'u_in_cumsum*time_step', 'u_in_cumsum*time_step_lag_1',
+       'u_in_cumsum*time_step/c', 'u_in_cumsum*time_step/c_lag_1', 'area/c',
+       'area/c_lag_1', 'u_out_lag_1', 'time_step*u_out', 'R+C', 'R/C',
+       'u_in/C', 'u_in/R', 'u_in_cumsum/C', 'u_in_cumsum/R', 'area*R/C',
+       'u_in_cumsum*R/C', 'u_in_cumsum*R/C_lag_1', 'timestep_diff',
+       'u_in_diff', 'u_in_pct_change', 'u_in_diff_next', 'u_in_log',
+       'u_in_cumsum_log', 'u_in_lag_1_is_zero', 'u_in_zero', 'u_in_lead_1',
+       'maop', 'spike', 'u_in_lag_1_is_zero_cumsum', 'is_max_u_in', 'nki',
+       'nki2', 'nki3', 'nki4', 'u_in_cummax - u_in']
+      target_column: pressure
+  val:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns: ['R_cat', 'C_cat', 'RC_cat']
+      numerical_columns: ['R', 'C', 'time_step', 'u_in', 'bidc', 'u_in_lag_1', 'u_in_lag_2',
+       'u_in_lag_3', 'u_in_lag_4', 'u_in_cumsum', 'u_in_cumsum_lag_1',
+       'u_in_cumsum_lag_2', 'u_in_cumsum_lag_1-u_in_cumsum_lag_2',
+       'u_in_cumsum_lag_3', 'u_in_cumsum_lag_4', 'u_in_cummean', 'u_in_cummax',
+       'next_u_in', 'area', 'area_lag_1', 'area_lag_2', 'area_lead_1',
+       'area_lead_2', 'area_diff_lag_1', 'area_diff_lead_1',
+       'u_in_cumsum*time_step', 'u_in_cumsum*time_step_lag_1',
+       'u_in_cumsum*time_step/c', 'u_in_cumsum*time_step/c_lag_1', 'area/c',
+       'area/c_lag_1', 'u_out_lag_1', 'time_step*u_out', 'R+C', 'R/C',
+       'u_in/C', 'u_in/R', 'u_in_cumsum/C', 'u_in_cumsum/R', 'area*R/C',
+       'u_in_cumsum*R/C', 'u_in_cumsum*R/C_lag_1', 'timestep_diff',
+       'u_in_diff', 'u_in_pct_change', 'u_in_diff_next', 'u_in_log',
+       'u_in_cumsum_log', 'u_in_lag_1_is_zero', 'u_in_zero', 'u_in_lead_1',
+       'maop', 'spike', 'u_in_lag_1_is_zero_cumsum', 'is_max_u_in', 'nki',
+       'nki2', 'nki3', 'nki4', 'u_in_cummax - u_in']
+      target_column: pressure
+  test:
+    class: VentilatorDataClassification
+    kwargs:
+      categorical_columns:
+      - u_out
+      - R
+      - C
+      numerical_columns:
+      - time_step
+      - u_in
+      - mean_u_in_last_5
+      - min_u_in_last_5
+      - max_u_in_last_5
+      - std_u_in_last_5
+      - mean_u_in_last_10
+      - min_u_in_last_10
+      - max_u_in_last_10
+      - std_u_in_last_10
+      - mean_u_in_next_5
+      - min_u_in_next_5
+      - max_u_in_next_5
+      - std_u_in_next_5
+      - mean_u_in_next_10
+      - min_u_in_next_10
+      - max_u_in_next_10
+      - std_u_in_next_10
+      - u_in_cumsum
+      - u_in_cummean
+      - u_in_cummax
+      - R+C
+      - R/C
+      - u_in/C
+      - u_in/R
+      - u_in_cumsum/C
+      - u_in_cumsum/R
+      - lag_u_in_1
+      - lead_u_in_1
+      - lag_u_in_2
+      - lead_u_in_2
+      - lag_u_in_3
+      - lead_u_in_3
+      - lag_u_in_4
+      - lead_u_in_4
+      - auc
+      - lag_auc_1
+      - lead_auc_1
+      - lag_auc_2
+      - lead_auc_2
+      - per_change_u_in_lag_u_in_1
+      - per_change_u_in_lead_u_in_1
+      - per_change_u_in_lag_u_in_2
+      - per_change_u_in_lead_u_in_2
+      - per_change_u_in_lag_u_in_3
+      - per_change_u_in_lead_u_in_3
+      - per_change_u_in_lag_u_in_4
+      - per_change_u_in_lead_u_in_4
+      - per_change_auc_lag_auc_1
+      - per_change_auc_lead_auc_1
+      - per_change_auc_lag_auc_2
+      - per_change_auc_lead_auc_2
+esr:
+  monitor: val_MAE
+  min_delta: 0.0001
+  patience: 40
+  verbose: false
+  mode: min
+num_epochs: &n_epochs 100
+batch_size:
+  train: 96
+  val: 128
+num_workers:
+  train: 8
+  val: 8
+optimizer:
+  optim_class: Adam
+  optim_kwargs:
+    lr: &learning_rate 1e-3
+
+start_lr: *learning_rate
+last_lr: 1e-5
+
+schedular:
+  schedular_class: OneCycleLR
+  schedular_interval: step
+  scheduler_kwargs:
+    max_lr: *learning_rate
+    epochs: *n_epochs
+    div_factor: 30
+    pct_start: 0.2
+    final_div_factor: 50
+# schedular:
+#     schedular_class: MultiplicativeLR
+#     schedular_interval: epoch
+    # scheduler_kwargs:
+
+loss:
+  class: CrossEntropyLoss
+  kwargs:
+    reduction: mean
+mp_training: True
+model:
+  class: LSTMTransformerModelClassificationV2
+  kwargs:
+    embedding_layer:
+      # u_out:
+      #   num_embeddings: 2
+      #   embedding_dim: 4
+      R:
+        num_embeddings: 3
+        embedding_dim: 4
+      C:
+        num_embeddings: 3
+        embedding_dim: 4
+      RC_CAT:
+        num_embeddings: 9
+        embedding_dim: 4
+    input_dim: &in_dim 72
+    rnn_layer:
+      layer1:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: *in_dim
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer2:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 1096
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer3:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 2120
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+      layer4:
+        class: LSTMDpReLu
+        kwargs:
+          input_size: 3144
+          hidden_size: 512
+          num_layers: 1
+          batch_first: true
+          bidirectional: true
+          dropout: 0.4
+          is_activation: false
+    transformer_layer:
+      num_layers: 4
+      class: TransformerEncoderLayer
+      kwargs:
+        d_model: 1024
+        nhead: 32
+        dim_feedforward: 1024
+        dropout: 0.7
+    rnn_init:
+      class: InitRNNWeights
+      kwargs:
+        init_type: yakama
+    fc_input_size: 4168
+    output_dim: 950
+# model:
+#   class: ConformerModelClassificationV2
+#   kwargs:
+#     apply_input_cnn: True #True False
+#     output_dim: &num_classes 950
+#     apply_embedding_dropout: False #False True
+#     embedding_dp: 0.5
+#     embedding_layer:
+#       # u_out:
+#       #   num_embeddings: 2
+#       #   embedding_dim: 4
+#       R:
+#         num_embeddings: 3
+#         embedding_dim: 4
+#       C:
+#         num_embeddings: 3
+#         embedding_dim: 4
+#       RC_CAT:
+#         num_embeddings: 9
+#         embedding_dim: 4
+
+#     input_dim: 72
+#     num_dim: &numerical_dim 60
+#     cnn_layer:
+#       layer1:
+#         class: &input_cnn_class Conv1DBnRelu
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: &cnn_out_dim 16
+#           kernel_size: 3
+#           padding: 1
+#           bias: False
+#           is_bn: True
+#       layer2:
+#         class: *input_cnn_class
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: *cnn_out_dim
+#           kernel_size: 5
+#           padding: 2
+#           bias: False
+#           is_bn: True
+#       layer3:
+#         class: *input_cnn_class
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: *cnn_out_dim
+#           kernel_size: 7
+#           padding: 3
+#           bias: False
+#           is_bn: True
+#       layer4:
+#         class: *input_cnn_class
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: *cnn_out_dim
+#           kernel_size: 9
+#           padding: 4
+#           bias: False
+#           is_bn: True
+#       layer5:
+#         class: *input_cnn_class
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: *cnn_out_dim
+#           kernel_size: 11
+#           padding: 5
+#           bias: False
+#           is_bn: True
+#       layer6:
+#         class: *input_cnn_class
+#         kwargs:
+#           in_channels: *numerical_dim
+#           out_channels: *cnn_out_dim
+#           kernel_size: 15
+#           padding: 7
+#           bias: False
+#           is_bn: True
+#     proj_layer:
+#       in_dim: 168 #168 72
+#       out_dim: 1024
+
+#     conformer_layer:
+#       layer1:
+#         class: &conf_class CustomConformerV2
+#         kwargs:
+#           d_model: 1024
+#           num_heads: &n_head 128
+#           dim_ff: &ff_dim 1024
+#           dropout: &transformer_dp 0.5
+#           kernel_size: &conformer_kernel_size 3
+#           num_kernels: &conformer_num_kernels 128
+#           apply_cnn: &is_cnn False
+#       layer2:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024 #1152 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer3:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024 #1280 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer4:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024 #1408 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer5:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer6:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer7:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer8:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer9:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer10:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer11:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+#       layer12:
+#         class: *conf_class
+#         kwargs:
+#           d_model: 1024
+#           num_heads: *n_head
+#           dim_ff: *ff_dim
+#           dropout: *transformer_dp
+#           kernel_size: *conformer_kernel_size
+#           num_kernels: *conformer_num_kernels
+#           apply_cnn: *is_cnn
+
+#     fc_layer:
+#       # layer1:
+#       #   class: LinBnReLu
+#       #   kwargs:
+#       #     in_dim: 1024 #1536 1024
+#       #     out_dim: &lin_dim 512
+#       #     is_bn: False
+#       #     is_act: False
+#       #     dropout: 0
+#       layer2:
+#         class: LinBnReLu
+#         kwargs:
+#           in_dim: 1024
+#           out_dim: *num_classes
+#           is_bn: False
+#           is_act: True
+#           dropout: 0.2
