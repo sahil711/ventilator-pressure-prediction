@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import (
 import pandas as pd
 from sklearn.model_selection import GroupKFold
 import os
-from litmodellib import Model
+from litmodellib import Model_regression
 from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 import datalib
@@ -113,8 +113,8 @@ def train_model(config_path, fold_nums):
     df["R_1"] = df["R"].values
     df["C_1"] = df["C"].values
     config = OmegaConf.load(config_path)
-    # df = create_feats(df)
-    df = fc(df)
+    df = create_feats(df)
+    # df = fc(df)
     df = df.groupby("breath_id").head(config.seq_len)
     if config.normalization.is_norm:
         scl = RobustScaler()
@@ -174,12 +174,15 @@ def train_model(config_path, fold_nums):
             logging_interval=config.schedular.schedular_interval
         )
 
+        # num_gpus = 1
         num_gpus = torch.cuda.device_count()
 
         train_iter = int(len(train_dl) / num_gpus)
         num_steps = int((len(train_dl) * config.num_epochs) / num_gpus)
 
-        lit_model = Model(config, num_train_iter=train_iter, num_steps=num_steps)
+        lit_model = Model_regression(
+            config, num_train_iter=train_iter, num_steps=num_steps
+        )
         # state_dict = torch.load(
         #     "../experiments/RNN-simple-v4/fold_0/model-epoch=97-val_MAE=0.2041-val_loss=0.2041.ckpt"
         # )["state_dict"]

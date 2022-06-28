@@ -1,8 +1,106 @@
 from torch import nn
 import torch
-from torch.nn import TransformerEncoderLayer
+from torch.nn import TransformerEncoderLayer, LSTM, Conv1d
 
-__all__ = ["TransformerEncoderLayer", "InitRNNWeights", "LSTMDpReLu", "LinBnReLu"]
+__all__ = [
+    "TransformerEncoderLayer",
+    "InitRNNWeights",
+    "LSTMDpReLu",
+    "LinBnReLu",
+    "LSTM",
+    "CustomConformer",
+    "Conv1d",
+    "CustomTransformerEncoderLayer",
+]
+
+
+class CustomConformerV2(nn.Module):
+    def __init__(
+        self, d_model, num_heads, dim_ff, dropout, kernel_size, num_kernels, apply_cnn
+    ):
+        super().__init__()
+        # self.encoder = nn.TransformerEncoderLayer(
+        #     d_model=d_model, nhead=num_heads, dim_feedforward=dim_ff, dropout=dropout
+        # )
+        self.encoder = CustomTransformerEncoderLayer(
+            d_model=d_model, nhead=num_heads, dim_feedforward=dim_ff, dropout=dropout
+        )
+        self.apply_cnn = apply_cnn
+        if self.apply_cnn:
+            self.cnn = nn.Conv1d(
+                in_channels=d_model,
+                out_channels=num_kernels,
+                kernel_size=kernel_size,
+                padding=(kernel_size // 2),
+            )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        if self.apply_cnn:
+            x_cnn = self.cnn(x.permute(0, 2, 1)).permute(0, 2, 1)
+            x = torch.cat([x, x_cnn], dim=-1)
+        return x
+
+
+class CustomConformer(nn.Module):
+    def __init__(
+        self, in_dim, d_model, num_heads, dim_ff, dropout, kernel_size, num_kernels
+    ):
+        super().__init__()
+        self.proj_layer = nn.Linear(
+            in_features=in_dim, out_features=d_model, bias=False
+        )
+        self.reverse_proj_layer = nn.Linear(
+            in_features=d_model, out_features=in_dim, bias=False
+        )
+        # self.encoder = nn.TransformerEncoderLayer(
+        #     d_model=d_model, nhead=num_heads, dim_feedforward=dim_ff, dropout=dropout
+        # )
+        self.encoder = CustomTransformerEncoderLayer(
+            d_model=d_model, nhead=num_heads, dim_feedforward=dim_ff, dropout=dropout
+        )
+        self.cnn = nn.Conv1d(
+            in_channels=in_dim,
+            out_channels=num_kernels,
+            kernel_size=kernel_size,
+            padding=(kernel_size // 2),
+        )
+
+    def forward(self, x):
+        x = self.proj_layer(x)
+        x = self.encoder(x)
+        x = self.reverse_proj_layer(x)
+        x_cnn = self.cnn(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = torch.cat([x, x_cnn], dim=-1)
+        return x
+
+
+class CustomTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout, activation="relu"):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(
+            embed_dim=d_model, num_heads=nhead, dropout=dropout
+        )
+        self.linear1 = nn.Linear(in_features=d_model, out_features=dim_feedforward)
+        self.linear2 = nn.Linear(in_features=dim_feedforward, out_features=d_model)
+        self.act = nn.ReLU(inplace=True)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dp1 = nn.Dropout(dropout)
+        self.dp2 = nn.Dropout(dropout)
+
+    def forward(self, x):
+        attn, _ = self.self_attn(x, x, x)
+        res = x + attn
+        res = self.norm1(res)
+        x = self.linear1(attn)
+        x = self.act(x)
+        x = self.dp1(x)
+        x = self.linear2(x)
+        x = self.dp2(x)
+        x = x + res
+        x = self.norm2(x)
+        return x
 
 
 class WaveBlock(nn.Module):
@@ -194,13 +292,16 @@ class LSTMUnit(nn.Module):
 
 
 class Conv1DBnRelu(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding, is_bn=False):
+    def __init__(
+        self, in_channels, out_channels, kernel_size, padding, is_bn=False, bias=True
+    ):
         super().__init__()
         self.conv = nn.Conv1d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
             padding=padding,
+            bias=bias,
         )
         self.is_bn = is_bn
         if self.is_bn:
@@ -255,6 +356,7 @@ class LinBnReLu(nn.Module):
         self.is_act = is_act
         if self.is_act:
             self.act = nn.ReLU()
+            # self.act = Swish()
         self.is_bn = is_bn
         if self.is_bn:
             self.bn = nn.BatchNorm1d(in_dim)
@@ -268,3 +370,140 @@ class LinBnReLu(nn.Module):
             x = self.act(x)
         x = self.lin(x)
         return x
+
+
+class Swish(nn.Module):
+    """
+    https://github.com/sooftware/conformer/blob/main/conformer/activation.py
+    Swish is a smooth, non-monotonic function that consistently matches or outperforms ReLU on deep networks applied
+    to a variety of challenging domains such as Image classification and Machine translation.
+    """
+
+    def __init__(self):
+        super(Swish, self).__init__()
+
+    def forward(self, inputs):
+        return inputs * inputs.sigmoid()
+
+
+class GLU(nn.Module):
+    """
+    https://github.com/sooftware/conformer/blob/main/conformer/activation.py
+    The gating mechanism is called Gated Linear Units (GLU), which was first introduced for natural language processing
+    in the paper “Language Modeling with Gated Convolutional Networks”
+    """
+
+    def __init__(self, dim):
+        super(GLU, self).__init__()
+        self.dim = dim
+
+    def forward(self, inputs):
+        outputs, gate = inputs.chunk(2, dim=self.dim)
+        return outputs * gate.sigmoid()
+
+
+class ConformerMHA(nn.Module):
+    def __init__(self, d_model, num_heads, dropout):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(
+            embed_dim=d_model, num_heads=num_heads, dropout=dropout
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.dp = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.norm(x)
+        x, _ = self.mha(x, x, x)
+        x = self.dp(x)
+        return x
+
+
+class ConformerFFN(nn.Module):
+    def __init__(self, in_dim, dim_multiplier, dropout):
+        super().__init__()
+        self.norm = nn.LayerNorm(in_dim)
+        self.linear1 = nn.Linear(
+            in_features=in_dim, out_features=in_dim * dim_multiplier
+        )
+        self.linear2 = nn.Linear(
+            in_features=in_dim * dim_multiplier, out_features=in_dim
+        )
+        self.act = Swish()
+        self.dp1 = nn.Dropout(dropout)
+        self.dp2 = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.norm(x)
+        x = self.linear1(x)
+        x = self.act(x)
+        x = self.dp1(x)
+        x = self.linear2(x)
+        x = self.dp2(x)
+        return x
+
+
+class ConformerConv(nn.Module):
+    def __init__(self, in_channels, proj_factor, kernel_size, dropout):
+        super().__init__()
+        self.pointconv1 = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=in_channels * proj_factor,
+            kernel_size=kernel_size,
+            padding=(kernel_size - 1) // 2,
+        )
+        self.conv = nn.Conv1d(
+            in_channels=in_channels * proj_factor,
+            out_channels=in_channels * proj_factor,
+            kernel_size=kernel_size,
+            padding=(kernel_size - 1) // 2,
+        )
+        self.pointconv2 = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=in_channels * proj_factor,
+            kernel_size=kernel_size,
+            padding=(kernel_size - 1) // 2,
+        )
+        self.batchnorm = nn.BatchNorm1d(in_channels * proj_factor)
+        self.layernorm = nn.LayerNorm(in_channels)
+        self.act = Swish()
+        self.dp = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.layernorm(x)
+        x = self.pointconv1(x.permute(0, 2, 1))
+        x = self.act(x)
+        x = self.conv(x)
+        x = self.batchnorm(x)
+        x = self.act(x)
+        x = self.pointconv2(x)
+        x = self.dp(x)
+        return x.permute(0, 2, 1)
+
+
+class ConformerBlock(nn.Module):
+    def __init__(
+        self, d_model, conv_multiplier, ffn_multiplier, dropout, kernel_size, num_heads
+    ):
+        super().__init__()
+        self.mha = ConformerMHA(d_model, num_heads, dropout)
+        self.conv = ConformerConv(
+            in_channels=d_model,
+            proj_factor=conv_multiplier,
+            kernel_size=kernel_size,
+            dropout=dropout,
+        )
+        self.ffn1 = ConformerFFN(
+            in_dim=d_model, dim_multiplier=ffn_multiplier, dropout=dropout
+        )
+        self.ffn2 = ConformerFFN(
+            in_dim=d_model, dim_multiplier=ffn_multiplier, dropout=dropout
+        )
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        x1 = x + 0.5 * self.ffn1(x)
+        x2 = x1 + self.mha(x1)
+        x3 = x2 + self.conv(x2)
+        output = x3 + 0.5 * self.ffn2(x3)
+        output = self.norm(output)
+        return output

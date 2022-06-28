@@ -26,6 +26,135 @@ def smoothing_regression_loss(criterion, y_pred, y_true):
     return loss
 
 
+class Model_regression(pl.LightningModule):
+    def __init__(self, config, **kwargs):
+        super().__init__()
+        self.config = config
+        self.save_hyperparameters(self.config)
+        self.model = getattr(modellib, self.config.model["class"])(
+            self.config.model["kwargs"]
+        )
+        self.criteria = getattr(nn, self.config.loss["class"])()
+        self.num_train_iter = kwargs.get("num_train_iter")
+        self.num_steps = kwargs.get("num_steps")
+        self.train_metric = MeanAbsoluteError(compute_on_step=False)
+        self.val_metric = MeanAbsoluteError(compute_on_step=False)
+        self.lr_step_size = kwargs.get("lr_step_size")
+
+    def training_step(self, batch, batch_idx):
+        y = batch["target"].view(-1)
+        preds = self.model(batch).view(-1)
+        if self.config.is_u_out:
+            idx = torch.where(batch["u_out"].view(-1) == 0)[0]
+        else:
+            idx = torch.where(batch["cat"][:, :, 0].view(-1) == 0)[0]
+        y_trunc = y[idx]
+        preds_trunc = preds[idx]
+        if self.config.training_type.loss == "truncated":
+            loss = self.criteria(preds_trunc, y_trunc)
+            self.train_metric(preds_trunc, y_trunc)
+        else:
+            loss = self.criteria(preds, y)
+            self.train_metric(preds, y)
+
+        self.log(
+            name="train_MAE",
+            value=self.train_metric,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            rank_zero_only=True,
+            sync_dist=True,
+        )
+
+        self.log(
+            name="train_loss",
+            value=loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True,
+            rank_zero_only=True,
+        )
+        return {"loss": loss}
+
+    def validation_step(self, batch, batch_idx):
+        y = batch["target"].view(-1)
+        preds = self.model(batch).view(-1)
+        if self.config.is_u_out:
+            idx = torch.where(batch["u_out"].view(-1) == 0)[0]
+        else:
+            idx = torch.where(batch["cat"][:, :, 0].view(-1) == 0)[0]
+        y_trunc = y[idx]
+        preds_trunc = preds[idx]
+        if self.config.training_type.loss == "truncated":
+            loss = self.criteria(preds_trunc, y_trunc)
+            self.val_metric(preds_trunc, y_trunc)
+        else:
+            loss = self.criteria(preds, y)
+            self.val_metric(preds, y)
+
+        self.log(
+            name="val_MAE",
+            value=self.val_metric,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            rank_zero_only=True,
+            sync_dist=True,
+        )
+
+        self.log(
+            name="val_loss",
+            value=loss,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+            rank_zero_only=True,
+        )
+
+    def test_step(self, batch, batch_idx):
+        preds = self.model(batch).view(-1)
+        return {"preds": preds}
+
+    def test_epoch_end(self, outputs):
+        preds = torch.cat([x["preds"] for x in outputs])
+        self.write_prediction("preds", preds, filename="prediction.pt")
+
+    def configure_optimizers(self):
+        optimizer = getattr(optim, self.config.optimizer.optim_class)(
+            **self.config.optimizer.optim_kwargs, params=self.model.parameters()
+        )
+        if self.config.schedular.schedular_class == "OneCycleLR":
+            sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
+                **self.config.schedular.scheduler_kwargs,
+                optimizer=optimizer,
+                steps_per_epoch=self.num_train_iter
+            )
+        elif self.config.schedular.schedular_class == "Linear":
+            sched = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=0, num_training_steps=self.num_steps
+            )
+        elif self.config.schedular.schedular_class == "MultiplicativeLR":
+            fun = lambda epoch: self.lr_step_size
+            sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
+                optimizer, lr_lambda=fun
+            )
+        else:
+            sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
+                **self.config.schedular.scheduler_kwargs, optimizer=optimizer
+            )
+
+        lr_dict = {
+            "scheduler": sched,
+            "interval": self.config.schedular.schedular_interval,
+            "monitor": "val_MAE",
+            "strict": True,
+        }
+        return {"optimizer": optimizer, "lr_scheduler": lr_dict}
+
+
 class Model(pl.LightningModule):
     def __init__(self, config, **kwargs):
         super().__init__()
@@ -34,11 +163,16 @@ class Model(pl.LightningModule):
         self.model = getattr(modellib, self.config.model["class"])(
             self.config.model["kwargs"]
         )
+        # model_path = "../experiments/LSTM-Regression-v7-long-run/fold_1/model-epoch=97-val_MAE=0.1642-val_loss=0.1620.ckpt"
+        # wt_dict = torch.load(model_path)["state_dict"]
+        # self.load_state_dict(wt_dict)
+
         self.criteria = getattr(losslib, self.config.loss["class"])(
             **self.config.loss["kwargs"]
         )
         self.num_train_iter = kwargs.get("num_train_iter")
         self.num_steps = kwargs.get("num_steps")
+        self.lr_step_size = kwargs.get("lr_step_size")
         self.train_metric = MeanAbsoluteError(compute_on_step=False)
         self.val_metric = MeanAbsoluteError(compute_on_step=False)
 
@@ -181,6 +315,11 @@ class Model(pl.LightningModule):
             sched = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=0, num_training_steps=self.num_steps
             )
+        elif self.config.schedular.schedular_class == "MultiplicativeLR":
+            fun = lambda epoch: self.lr_step_size
+            sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
+                optimizer, lr_lambda=fun
+            )
         else:
             sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
                 **self.config.schedular.scheduler_kwargs, optimizer=optimizer
@@ -213,6 +352,32 @@ def smoothing_loss(criterion, y_pred, y_true):
     return loss
 
 
+def oridnal_cross_entropy(x, y):
+    wts = (
+        1 + (y - x.argmax(dim=1)).abs() * 0.0703
+    )  # added one so that even when the class is same,there is some loss because of CE
+    log_prob = -1.0 * nn.LogSoftmax(dim=1)(x)
+    loss = log_prob.gather(1, y.unsqueeze(1))
+    loss = loss.squeeze(1)
+    loss *= wts
+    loss = loss.mean()
+    return loss
+
+
+def smoothing_oridnal_cross_entropy(y_pred, y_true):
+    loss = oridnal_cross_entropy(y_pred, y_true)
+
+    for lag, w in [(1, 8 / 15), (2, 4 / 15), (3, 2 / 15), (4, 1 / 15)]:
+        neg_lag_target = nn.ReLU()(y_true - lag)
+        neg_lag_target = neg_lag_target.long()
+        neg_lag_loss = oridnal_cross_entropy(y_pred, neg_lag_target)
+        pos_lag_target = 949 - nn.ReLU()((949 - (y_true + lag)))
+        pos_lag_target = pos_lag_target.long()
+        pos_lag_loss = oridnal_cross_entropy(y_pred, pos_lag_target)
+        loss += (neg_lag_loss + pos_lag_loss) * w
+    return loss
+
+
 class ClassifcationModel(pl.LightningModule):
     def __init__(self, config, **kwargs):
         super().__init__()
@@ -221,7 +386,7 @@ class ClassifcationModel(pl.LightningModule):
         self.model = getattr(modellib, self.config.model["class"])(
             self.config.model["kwargs"]
         )
-        # model_path = "../experiments/LSTMDpRelu-concat-skip-classify-smooth-CE-dp-0.4-deep/fold_0/model-epoch=94-val_MAE=0.1567-val_loss=0.0000.ckpt"
+        # model_path = "../experiments/LSTMDpRelu-Transformer-concat-skip-classify-smooth-CE-dp-0.4-10-folds/fold_1/model-epoch=98-val_MAE=0.1473-val_loss=0.0000.ckpt"
         # wt_dict = torch.load(model_path)["state_dict"]
         # self.load_state_dict(wt_dict)
         self.criteria = getattr(nn, self.config.loss["class"])()
@@ -230,6 +395,7 @@ class ClassifcationModel(pl.LightningModule):
         )
         self.num_train_iter = kwargs.get("num_train_iter")
         self.num_steps = kwargs.get("num_steps")
+        self.lr_step_size = kwargs.get("lr_step_size")
         self.mapping = joblib.load(kwargs.get("mapping"))
         self.topk = kwargs.get("topk")
         self.train_metric = MeanAbsoluteError(compute_on_step=False)
@@ -247,37 +413,17 @@ class ClassifcationModel(pl.LightningModule):
         if self.config.training_type.loss == "truncated":
             if self.config.training_type.is_smoothing:
                 loss = smoothing_loss(self.criteria, preds_trunc, y_trunc)
+            elif self.config.training_type.is_ordinal:
+                loss = smoothing_oridnal_cross_entropy(preds_trunc, y_trunc)
             else:
                 loss = self.criteria(preds_trunc, y_trunc)
         else:
             if self.config.training_type.is_smoothing:
                 loss = smoothing_loss(self.criteria, preds, y)
+            elif self.config.training_type.is_ordinal:
+                loss = smoothing_oridnal_cross_entropy(preds, y)
             else:
                 loss = self.criteria(preds, y)
-
-        # true_y = get_true_val(self.mapping, y_trunc)
-        # topk = preds_trunc.topk(k=self.topk, dim=1).indices
-        # # true_preds = torch.tensor(
-        # #     [torch.median(get_true_val(self.mapping, x)).item() for x in topk]
-        # # )
-        # true_preds = (
-        #     get_true_val(self.mapping, topk.view(-1))
-        #     .view(-1, self.topk)
-        #     .median(dim=1)
-        #     .values
-        # )
-
-        # self.train_metric(true_preds, true_y)
-
-        # self.log(
-        #     name="train_MAE",
-        #     value=self.train_metric,
-        #     prog_bar=True,
-        #     on_step=True,
-        #     on_epoch=True,
-        #     rank_zero_only=True,
-        #     sync_dist=True,
-        # )
 
         self.log(
             name="train_loss",
@@ -290,31 +436,6 @@ class ClassifcationModel(pl.LightningModule):
         )
         # return {"loss": loss, "target": y_trunc.detach(), "preds": preds_trunc.detach()}
         return {"loss": loss}
-
-    # def training_epoch_end(self, outputs):
-    #     st = time.time()
-    #     out = self.all_gather(outputs)
-    #     y = torch.cat([x["target"].squeeze(0).cpu() for x in out], dim=0)
-    #     preds = torch.cat([x["preds"].squeeze(0).cpu() for x in out], dim=0)
-    #     true_y = get_true_val(self.mapping, y)
-    #     topk = preds.topk(k=self.topk, dim=1).indices
-    #     true_preds = (
-    #         get_true_val(self.mapping, topk.view(-1))
-    #         .view(-1, self.topk)
-    #         .median(dim=1)
-    #         .values
-    #     )
-    #     print(time.time() - st, y.shape, preds.shape)
-    #     self.train_metric(true_preds, true_y)
-    #     self.log(
-    #         name="train_MAE",
-    #         value=self.train_metric,
-    #         prog_bar=True,
-    #         on_step=False,
-    #         on_epoch=True,
-    #         rank_zero_only=True,
-    #         sync_dist=True,
-    #     )
 
     def validation_step(self, batch, batch_idx):
         y = batch["target"].view(-1)
@@ -348,35 +469,6 @@ class ClassifcationModel(pl.LightningModule):
             rank_zero_only=True,
             sync_dist=True,
         )
-        # return y_trunc, preds_trunc
-
-    # def validation_epoch_end(self, outputs):
-    #     out = self.all_gather(outputs)
-    #     print(out)
-    #     print([x[0].shape for x in out])
-    #     print([x[1].shape for x in out])
-    #     y = torch.hstack([x for x in out[0]])
-    #     y = torch.cat([x for x in out[0]])
-    #     # y = torch.cat([x[0].squeeze(0).cpu() for x in out], dim=0)
-    #     # preds = torch.cat([x[1].squeeze(0).cpu() for x in out], dim=0)
-    #     # true_y = get_true_val(self.mapping, y)
-    #     # topk = preds.topk(k=self.topk, dim=1).indices
-    #     # true_preds = (
-    #     #     get_true_val(self.mapping, topk.view(-1))
-    #     #     .view(-1, self.topk)
-    #     #     .median(dim=1)
-    #     #     .values
-    #     # )
-    #     # self.val_metric(true_preds, true_y)
-    #     # self.log(
-    #     #     name="val_MAE",
-    #     #     value=self.val_metric,
-    #     #     prog_bar=True,
-    #     #     on_step=False,
-    #     #     on_epoch=True,
-    #     #     rank_zero_only=True,
-    #     #     sync_dist=True,
-    #     # )
 
     def test_step(self, batch, batch_idx):
         preds = self.model(batch).view(-1, 950)
@@ -410,6 +502,11 @@ class ClassifcationModel(pl.LightningModule):
         elif self.config.schedular.schedular_class == "Linear":
             sched = get_linear_schedule_with_warmup(
                 optimizer, num_warmup_steps=0, num_training_steps=self.num_steps
+            )
+        elif self.config.schedular.schedular_class == "MultiplicativeLR":
+            fun = lambda epoch: self.lr_step_size
+            sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(
+                optimizer, lr_lambda=fun
             )
         else:
             sched = getattr(optim.lr_scheduler, self.config.schedular.schedular_class)(

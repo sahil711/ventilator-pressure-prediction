@@ -101,12 +101,6 @@ class VentilatorData(Dataset):
         return len(self.group_dict)
 
     def __getitem__(self, idx):
-        # data = self.group_df.get_group(idx)
-        # num_data = torch.tensor(
-        #     data[self.numerical_columns].values, dtype=torch.float32
-        # )
-        # cat_data = torch.tensor(data[self.categorical_columns].values, dtype=torch.long)
-
         data = self.group_dict[idx]
         cat_data = torch.tensor(
             np.array([data[k] for k in self.categorical_columns]).T, dtype=torch.long
